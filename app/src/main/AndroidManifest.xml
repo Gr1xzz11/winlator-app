@@ -18,22 +18,28 @@
 
     <application
         android:icon="@mipmap/ic_launcher"
-        android:appCategory="game"
-        android:isGame="true"
+        android:appCategory="productivity"
+        android:isGame="false"
         android:extractNativeLibs="true"
         android:allowAudioPlaybackCapture="true"
         android:label="@string/app_name">
 
-        <activity android:name="com.winlator.MainActivity"
+        <activity android:name="com.winlator.EduRunnerActivity"
             android:theme="@style/AppThemeDark"
             android:exported="true"
-            android:screenOrientation="sensor"
+            android:screenOrientation="sensorLandscape"
             android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize|density|navigation">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+
+        <activity android:name="com.winlator.MainActivity"
+            android:theme="@style/AppThemeDark"
+            android:exported="false"
+            android:screenOrientation="sensor"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize|density|navigation" />
 
         <activity android:name="com.winlator.XServerDisplayActivity"
             android:exported="false"
@@ -64,7 +70,7 @@
 
         <provider
             android:name="androidx.core.content.FileProvider"
-            android:authorities="com.winlator.FileProvider"
+            android:authorities="${applicationId}.FileProvider"
             android:exported="false"
             android:grantUriPermissions="true">
 
