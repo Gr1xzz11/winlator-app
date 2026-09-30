@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Winlator</string>
+    <string name="app_name">GRXT EduRunner</string>
     <string name="run">Run</string>
     <string name="edit">Edit</string>
     <string name="remove">Remove</string>
@@ -352,10 +352,10 @@
     <string name="ddraw_wrapper" translatable="false">DDraw Wrapper</string>
     <string name="renderer">Renderer</string>
     <string name="default_no_override">Default (No override)</string>
-    <string name="fgs_notification_channel_desc">Keeps Winlator running in the background so a wine session is not interrupted by Android\'s background process management.</string>
+    <string name="fgs_notification_channel_desc">Keeps GRXT EduRunner running in the background so a wine session is not interrupted by Android\'s background process management.</string>
     <string name="fgs_notification_content_container_background">A container session is running in the background</string>
     <string name="fgs_notification_content_container_foreground">There is a container session running</string>
-    <string name="fgs_notification_content_else">Winlator is running in the background</string>
+    <string name="fgs_notification_content_else">GRXT EduRunner is running in the background</string>
     <string name="save_mem_on_run_from_steam">Save memory on run from Steam</string>
     <string name="present_mode">Present Mode</string>
 </resources>
