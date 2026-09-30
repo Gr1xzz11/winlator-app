@@ -11,6 +11,7 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.FragmentManager;
 
+import com.winlator.core.AppUtils;
 import com.winlator.xenvironment.RootFSInstaller;
 
 public class EduRunnerActivity extends AppCompatActivity {
