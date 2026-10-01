@@ -6,6 +6,7 @@ import android.content.Intent;
 import android.database.Cursor;
 import android.net.Uri;
 import android.provider.OpenableColumns;
+import android.provider.DocumentsContract;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
@@ -35,6 +36,7 @@ import java.util.ArrayList;
 public class EduRunnerHomeFragment extends Fragment {
     private static final String DEV_PIN = "1283256";
     private static final int PICK_EXE = 2201;
+    private static final int PICK_FOLDER = 2202;
     private RecyclerView recyclerView;
     private View emptyView;
     private ContainerManager manager;
@@ -59,11 +61,27 @@ public class EduRunnerHomeFragment extends Fragment {
     }
 
     private void showSettings() {
-        String[] items = {"О приложении"};
+        String[] items = {"Программы", "Runtime", "Экран", "Совместимость", "Отладка", "О приложении"};
         new AlertDialog.Builder(requireContext())
                 .setTitle("Настройки")
-                .setItems(items, (d, which) -> showAbout())
+                .setItems(items, (d, which) -> {
+                    if (which == 0) showProgramManager();
+                    else if (which == 5) showAbout();
+                    else Toast.makeText(requireContext(), items[which] + " — параметры будут добавлены после рабочего запуска", Toast.LENGTH_SHORT).show();
+                })
                 .setNegativeButton("Закрыть", null)
+                .show();
+    }
+
+    private void showProgramManager() {
+        String[] items = {"Добавить папку программы", "Добавить одиночный EXE"};
+        new AlertDialog.Builder(requireContext())
+                .setTitle("Программы")
+                .setItems(items, (d, which) -> {
+                    if (which == 0) pickFolder();
+                    else pickExe();
+                })
+                .setNegativeButton("Назад", null)
                 .show();
     }
 
@@ -133,6 +151,12 @@ public class EduRunnerHomeFragment extends Fragment {
     }
 
 
+    private void pickFolder() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+        startActivityForResult(intent, PICK_FOLDER);
+    }
+
     private void pickExe() {
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
@@ -143,9 +167,117 @@ public class EduRunnerHomeFragment extends Fragment {
     @Override
     public void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == PICK_EXE && resultCode == Activity.RESULT_OK && data != null && data.getData() != null) {
+        if (resultCode != Activity.RESULT_OK || data == null || data.getData() == null) return;
+        if (requestCode == PICK_EXE) {
             importExe(data.getData());
+        } else if (requestCode == PICK_FOLDER) {
+            Uri tree = data.getData();
+            try { requireContext().getContentResolver().takePersistableUriPermission(tree, Intent.FLAG_GRANT_READ_URI_PERMISSION); } catch (Exception ignored) {}
+            importFolder(tree);
         }
+    }
+
+
+    private void importFolder(Uri treeUri) {
+        Toast.makeText(requireContext(), "Копирование программы…", Toast.LENGTH_SHORT).show();
+        new Thread(() -> {
+            try {
+                String folderName = getTreeName(treeUri);
+                JSONObject config = new JSONObject();
+                config.put("name", folderName);
+                config.put("wincomponents", Container.DEFAULT_WINCOMPONENTS);
+                requireActivity().runOnUiThread(() -> {
+                    try {
+                        manager.createContainerAsync(config, container -> {
+                            if (container == null) {
+                                Toast.makeText(requireContext(), "Не удалось создать контейнер", Toast.LENGTH_LONG).show();
+                                return;
+                            }
+                            new Thread(() -> copyTreeIntoContainer(treeUri, container, folderName)).start();
+                        });
+                    } catch (Exception e) {
+                        Toast.makeText(requireContext(), "Ошибка контейнера: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                    }
+                });
+            } catch (Exception e) {
+                requireActivity().runOnUiThread(() -> Toast.makeText(requireContext(), "Ошибка: " + e.getMessage(), Toast.LENGTH_LONG).show());
+            }
+        }).start();
+    }
+
+    private void copyTreeIntoContainer(Uri treeUri, Container container, String programName) {
+        try {
+            File appDir = new File(container.getRootDir(), ".wine/drive_c/GRXT/" + safeName(programName));
+            if (!appDir.exists() && !appDir.mkdirs()) throw new Exception("Не удалось создать папку программы");
+            String[] exePath = new String[1];
+            copyDocumentChildren(treeUri, treeUri, appDir, exePath);
+            if (exePath[0] == null) throw new Exception("В выбранной папке не найден .exe");
+            createShortcut(container, programName, new File(exePath[0]));
+            requireActivity().runOnUiThread(() -> {
+                manager = new ContainerManager(requireContext());
+                refresh();
+                Toast.makeText(requireContext(), programName + " установлен", Toast.LENGTH_LONG).show();
+            });
+        } catch (Exception e) {
+            requireActivity().runOnUiThread(() -> Toast.makeText(requireContext(), "Ошибка установки: " + e.getMessage(), Toast.LENGTH_LONG).show());
+        }
+    }
+
+    private void copyDocumentChildren(Uri treeUri, Uri parentUri, File dest, String[] exePath) throws Exception {
+        String parentId = DocumentsContract.getDocumentId(parentUri);
+        Uri children = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, parentId);
+        try (Cursor cursor = requireContext().getContentResolver().query(children,
+                new String[]{DocumentsContract.Document.COLUMN_DOCUMENT_ID, DocumentsContract.Document.COLUMN_DISPLAY_NAME, DocumentsContract.Document.COLUMN_MIME_TYPE},
+                null, null, null)) {
+            if (cursor == null) throw new Exception("Не удалось прочитать папку");
+            while (cursor.moveToNext()) {
+                String id = cursor.getString(0);
+                String name = cursor.getString(1);
+                String mime = cursor.getString(2);
+                Uri child = DocumentsContract.buildDocumentUriUsingTree(treeUri, id);
+                File out = new File(dest, safeName(name));
+                if (DocumentsContract.Document.MIME_TYPE_DIR.equals(mime)) {
+                    if (!out.exists()) out.mkdirs();
+                    copyDocumentChildren(treeUri, child, out, exePath);
+                } else {
+                    try (InputStream in = requireContext().getContentResolver().openInputStream(child);
+                         FileOutputStream fos = new FileOutputStream(out)) {
+                        if (in == null) throw new Exception("Не удалось открыть " + name);
+                        byte[] buffer = new byte[131072];
+                        int n;
+                        while ((n = in.read(buffer)) > 0) fos.write(buffer, 0, n);
+                    }
+                    if (exePath[0] == null && name.toLowerCase().endsWith(".exe")) exePath[0] = out.getAbsolutePath();
+                }
+            }
+        }
+    }
+
+    private String getTreeName(Uri treeUri) {
+        String id = DocumentsContract.getTreeDocumentId(treeUri);
+        int p = id.lastIndexOf(':');
+        String name = p >= 0 ? id.substring(p + 1) : id;
+        p = name.lastIndexOf('/');
+        if (p >= 0) name = name.substring(p + 1);
+        return name.isEmpty() ? "Windows Program" : name;
+    }
+
+    private String safeName(String name) {
+        return name.replaceAll("[\\\\/:*?\\\"<>|]", "_");
+    }
+
+    private void createShortcut(Container container, String programName, File exe) {
+        File desktop = new File(container.getUserDir(), "Desktop");
+        if (!desktop.exists()) desktop.mkdirs();
+        File shortcut = new File(desktop, safeName(programName) + ".desktop");
+        String winPath = "C:\\\\GRXT\\\\" + safeName(programName) + "\\\\" + exe.getName();
+        String content = "[Desktop Entry]\\n" +
+                "Name=" + programName + "\\n" +
+                "Exec=env WINEPREFIX=\\\"$HOME/.wine\\\" wine " + winPath + "\\n" +
+                "Type=Application\\n" +
+                "\\n[Extra Data]\\n" +
+                "grxtExecPath=" + exe.getAbsolutePath() + "\\n";
+        FileUtils.writeString(shortcut, content);
     }
 
     private void importExe(Uri uri) {
@@ -179,17 +311,7 @@ public class EduRunnerHomeFragment extends Fragment {
                             while ((n = in.read(buffer)) > 0) out.write(buffer, 0, n);
                         }
 
-                        File desktop = new File(container.getUserDir(), "Desktop");
-                        if (!desktop.exists()) desktop.mkdirs();
-                        File shortcut = new File(desktop, programName.replaceAll("[^a-zA-Z0-9._ -]", "_") + ".desktop");
-                        String winPath = "C:\\\\GRXT\\\\" + exe.getName();
-                        String content = "[Desktop Entry]\\n" +
-                                "Name=" + programName + "\\n" +
-                                "Exec=env WINEPREFIX=\\\"$HOME/.wine\\\" wine " + winPath + "\\n" +
-                                "Type=Application\\n" +
-                                "\\n[Extra Data]\\n" +
-                                "grxtExecPath=" + exe.getAbsolutePath() + "\\n";
-                        FileUtils.writeString(shortcut, content);
+                        createShortcut(container, programName, exe);
 
                         requireActivity().runOnUiThread(() -> {
                             manager = new ContainerManager(requireContext());
