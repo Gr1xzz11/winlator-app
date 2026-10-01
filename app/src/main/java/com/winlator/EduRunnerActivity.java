@@ -23,23 +23,26 @@ import com.winlator.xenvironment.RootFSInstaller;
 
 public class EduRunnerActivity extends AppCompatActivity {
     private static final int STORAGE_PERMISSION_REQUEST = 1001;
-    private final Handler handler = new Handler(Looper.getMainLooper());
+    private boolean setupStarted;
     private boolean homeShown = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         EduRunnerCrashHandler.install(this);
         AppUtils.setActivityTheme(this);
-        super.onCreate(savedInstanceState);
+        super.onCreate(null);
         setContentView(R.layout.edurunner_activity);
         enterImmersiveMode();
         requestCrashLogStorageAccess();
 
-        if (runtimeReady()) {
-            showHome();
-        } else if (!requestAppPermissions()) {
-            startRuntimeSetup();
+        // Discard restored fragments: they could create a manager during an interrupted install.
+        if (savedInstanceState != null) {
+            for (androidx.fragment.app.Fragment fragment : getSupportFragmentManager().getFragments()) {
+                getSupportFragmentManager().beginTransaction().remove(fragment).commitNow();
+            }
         }
+        showLoading();
+        if (!requestAppPermissions()) startRuntimeSetup();
     }
 
     private void enterImmersiveMode() {
@@ -64,20 +67,27 @@ public class EduRunnerActivity extends AppCompatActivity {
                 intent.setData(Uri.parse("package:" + getPackageName()));
                 startActivity(intent);
             } catch (Exception ignored) {
-                startActivity(new Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION));
+                try { startActivity(new Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)); }
+                catch (Exception unavailable) { /* Crash reports still have an app-private fallback. */ }
             }
         }
     }
 
-    private boolean runtimeReady() {
-        RootFS rootFS = RootFS.find(this);
-        return rootFS.isValid() && rootFS.getVersion() >= RootFSInstaller.LATEST_VERSION;
-    }
-
     private void startRuntimeSetup() {
+        if (setupStarted) return;
+        setupStarted = true;
         showLoading();
-        RootFSInstaller.installIfNeeded(this);
-        waitForRuntime();
+        RootFSInstaller.installIfNeeded(this, success -> {
+            if (isFinishing() || isDestroyed()) return;
+            setupStarted = false;
+            if (success) showHome();
+            else new android.app.AlertDialog.Builder(this)
+                    .setTitle("Не удалось подготовить среду")
+                    .setMessage("Проверьте свободное место и повторите установку.")
+                    .setCancelable(false)
+                    .setPositiveButton("Повторить", (dialog, which) -> startRuntimeSetup())
+                    .setNegativeButton("Закрыть", (dialog, which) -> finish()).show();
+        });
     }
 
     private void showLoading() {
@@ -92,23 +102,15 @@ public class EduRunnerActivity extends AppCompatActivity {
                 new android.widget.FrameLayout.LayoutParams(-1, -1));
     }
 
-    private void waitForRuntime() {
-        handler.postDelayed(new Runnable() {
-            @Override public void run() {
-                if (isFinishing() || isDestroyed()) return;
-                if (runtimeReady()) showHome();
-                else handler.postDelayed(this, 500);
-            }
-        }, 500);
-    }
-
     private void showHome() {
         if (homeShown || isFinishing() || isDestroyed()) return;
+        if (getSupportFragmentManager().isStateSaved()) return;
         homeShown = true;
+        ((android.widget.FrameLayout) findViewById(R.id.EduRunnerFragmentContainer)).removeAllViews();
         getSupportFragmentManager()
                 .beginTransaction()
                 .replace(R.id.EduRunnerFragmentContainer, new EduRunnerHomeFragment())
-                .commitAllowingStateLoss();
+                .commit();
     }
 
     private boolean requestAppPermissions() {
@@ -129,11 +131,14 @@ public class EduRunnerActivity extends AppCompatActivity {
         if (requestCode == STORAGE_PERMISSION_REQUEST && grantResults.length > 0 &&
                 grantResults[0] == PackageManager.PERMISSION_GRANTED) {
             startRuntimeSetup();
+        } else if (requestCode == STORAGE_PERMISSION_REQUEST) {
+            // SAF import and RootFS in internal storage do not need legacy storage permission.
+            startRuntimeSetup();
         }
     }
 
-    @Override protected void onDestroy() {
-        handler.removeCallbacksAndMessages(null);
-        super.onDestroy();
+    @Override protected void onResumeFragments() {
+        super.onResumeFragments();
+        if (!homeShown && !setupStarted) startRuntimeSetup();
     }
 }

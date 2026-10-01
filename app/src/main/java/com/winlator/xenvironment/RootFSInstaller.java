@@ -43,42 +43,86 @@ public abstract class RootFSInstaller {
         }
     }
 
+    private static final java.util.concurrent.ExecutorService INSTALLER = Executors.newSingleThreadExecutor();
+    private static final android.os.Handler MAIN = new android.os.Handler(android.os.Looper.getMainLooper());
+    private static final ArrayList<com.winlator.core.Callback<Boolean>> pendingCallbacks = new ArrayList<>();
+    private static boolean installing;
+
     public static void install(final AppCompatActivity activity) {
+        install(activity, null);
+    }
+
+    public static void install(final AppCompatActivity activity, com.winlator.core.Callback<Boolean> callback) {
+        synchronized (RootFSInstaller.class) {
+            if (callback != null) pendingCallbacks.add(callback);
+            if (installing) return;
+            installing = true;
+        }
         AppUtils.keepScreenOn(activity);
-        RootFS rootFS = RootFS.find(activity);
-        final File rootDir = rootFS.getRootDir();
-
+        android.content.Context context = activity.getApplicationContext();
+        RootFS rootFS = RootFS.find(context);
+        File rootDir = rootFS.getRootDir();
         SettingsFragment.resetPreferenceVersions(activity);
-
         final DownloadProgressDialog dialog = new DownloadProgressDialog(activity);
         dialog.show(R.string.installing_system_files);
-        Executors.newSingleThreadExecutor().execute(() -> {
-            clearRootDir(rootDir);
-            final long contentLength = TarCompressorUtils.getContentLength(TarCompressorUtils.Type.ZSTD, activity, FILENAME, rootDir);
-            AtomicLong totalSizeRef = new AtomicLong();
-
-            boolean success = TarCompressorUtils.extract(TarCompressorUtils.Type.ZSTD, activity, FILENAME, rootDir, (file, size) -> {
-                if (size > 0) {
-                    long totalSize = totalSizeRef.addAndGet(size);
-                    final int progress = (int)(((float)totalSize / contentLength) * 100);
-                    activity.runOnUiThread(() -> dialog.setProgress(progress));
+        INSTALLER.execute(() -> {
+            boolean success = false;
+            try {
+                rootFS.getRFSVersionFile().delete();
+                clearRootDir(rootDir);
+                long contentLength = TarCompressorUtils.getContentLength(TarCompressorUtils.Type.ZSTD, context, FILENAME, rootDir);
+                AtomicLong totalSizeRef = new AtomicLong();
+                success = contentLength > 0 && TarCompressorUtils.extract(TarCompressorUtils.Type.ZSTD, context, FILENAME, rootDir, (file, size) -> {
+                    if (size > 0) {
+                        long totalSize = totalSizeRef.addAndGet(size);
+                        int progress = (int)Math.min(100, totalSize * 100 / contentLength);
+                        MAIN.post(() -> {
+                            if (!activity.isFinishing() && !activity.isDestroyed()) dialog.setProgress(progress);
+                        });
+                    }
+                    return file;
+                });
+                if (success) {
+                    resetContainerRFSVersions(context);
+                    // Publish readiness only after extraction AND container migration finish.
+                    rootFS.createRFSVersionFile(LATEST_VERSION);
+                    success = rootFS.isValid() && rootFS.getVersion() == LATEST_VERSION;
                 }
-                return file;
-            });
-
-            if (success) {
-                rootFS.createRFSVersionFile(LATEST_VERSION);
-                resetContainerRFSVersions(activity);
+            } catch (Exception error) {
+                android.util.Log.e("EduRunner", "RootFS installation failed", error);
+                success = false;
             }
-            else AppUtils.showToast(activity, R.string.unable_to_install_system_files);
-
-            dialog.closeOnUiThread();
+            if (!success) rootFS.getRFSVersionFile().delete();
+            final boolean installed = success;
+            MAIN.post(() -> {
+                if (!activity.isDestroyed()) {
+                    dialog.close();
+                    if (!installed) AppUtils.showToast(activity, R.string.unable_to_install_system_files);
+                }
+                ArrayList<com.winlator.core.Callback<Boolean>> callbacks;
+                synchronized (RootFSInstaller.class) {
+                    installing = false;
+                    callbacks = new ArrayList<>(pendingCallbacks);
+                    pendingCallbacks.clear();
+                }
+                for (com.winlator.core.Callback<Boolean> listener : callbacks) listener.call(installed);
+            });
         });
     }
 
     public static void installIfNeeded(final AppCompatActivity activity) {
+        installIfNeeded(activity, null);
+    }
+
+    public static void installIfNeeded(final AppCompatActivity activity, com.winlator.core.Callback<Boolean> callback) {
         RootFS rootFS = RootFS.find(activity);
-        if (!rootFS.isValid() || rootFS.getVersion() < LATEST_VERSION) install(activity);
+        synchronized (RootFSInstaller.class) {
+            if (installing || !rootFS.isValid() || rootFS.getVersion() < LATEST_VERSION) {
+                install(activity, callback);
+                return;
+            }
+        }
+        if (callback != null) MAIN.post(() -> callback.call(true));
     }
 
     private static void clearOptDir(File optDir) {

@@ -16,7 +16,8 @@ public final class EduRunnerCrashHandler implements Thread.UncaughtExceptionHand
     private final Thread.UncaughtExceptionHandler previous;
 
     private EduRunnerCrashHandler(Context context) {
-        this.context = context.getApplicationContext();
+        Context app = context.getApplicationContext();
+        this.context = app != null ? app : context;
         this.previous = Thread.getDefaultUncaughtExceptionHandler();
     }
 
@@ -33,17 +34,26 @@ public final class EduRunnerCrashHandler implements Thread.UncaughtExceptionHand
     }
 
     private void writeCrash(Thread thread, Throwable throwable) throws Exception {
-        File dir;
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || Environment.isExternalStorageManager()) {
-            dir = new File(Environment.getExternalStorageDirectory(), "GRXT");
-        } else {
-            dir = new File(context.getExternalFilesDir(null), "GRXT");
-        }
-        if (!dir.exists()) dir.mkdirs();
-
         String stamp = new SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", Locale.US).format(new Date());
+        try {
+            writeReport(new File(Environment.getExternalStorageDirectory(), "GRXT"), stamp, thread, throwable);
+            return;
+        } catch (Exception unavailable) {
+            // A granted permission does not guarantee that shared storage is writable.
+        }
+        File external = context.getExternalFilesDir(null);
+        try {
+            if (external == null) throw new java.io.IOException("External files unavailable");
+            writeReport(new File(external, "GRXT"), stamp, thread, throwable);
+        } catch (Exception unavailable) {
+            writeReport(new File(context.getFilesDir(), "GRXT"), stamp, thread, throwable);
+        }
+    }
+
+    private void writeReport(File dir, String stamp, Thread thread, Throwable throwable) throws Exception {
+        if (!dir.isDirectory() && !dir.mkdirs()) throw new java.io.IOException("Cannot create " + dir);
         File out = new File(dir, "crash-" + stamp + ".txt");
-        try (PrintWriter pw = new PrintWriter(new FileOutputStream(out))) {
+        try (PrintWriter pw = new PrintWriter(new java.io.OutputStreamWriter(new FileOutputStream(out), java.nio.charset.StandardCharsets.UTF_8))) {
             pw.println("GRXT EduRunner crash report");
             pw.println("Time: " + new Date());
             pw.println("Thread: " + thread.getName());
@@ -51,8 +61,13 @@ public final class EduRunnerCrashHandler implements Thread.UncaughtExceptionHand
             pw.println("Device: " + Build.MANUFACTURER + " " + Build.MODEL);
             pw.println("Build: " + Build.FINGERPRINT);
             pw.println("App: " + context.getPackageName());
+            android.content.pm.PackageInfo info = context.getPackageManager().getPackageInfo(context.getPackageName(), 0);
+            pw.println("Version: " + info.versionName + " (" + info.versionCode + ")");
+            pw.println("Exception: " + throwable);
             pw.println();
             throwable.printStackTrace(pw);
+            pw.flush();
+            if (pw.checkError()) throw new java.io.IOException("Cannot write " + out);
         }
     }
 }
