@@ -33,6 +33,19 @@ STUBS.update({
 'androidx/annotation/NonNull.java': 'package androidx.annotation; public @interface NonNull {}',
 })
 CRASH_TEST = r'''
+static void runtimeCommandTest()throws Exception {
+Path root=Files.createTempDirectory("runtime-package");
+Path bin=root.resolve("usr/local/bin/box64"),loader=root.resolve("usr/lib/ld-linux-aarch64.so.1");
+Files.createDirectories(bin.getParent()); Files.createDirectories(loader.getParent());
+Files.writeString(bin,"ELF"); Files.writeString(loader,"ELF");
+String command=com.winlator.core.GuestRuntimeCommand.create(root.toFile(),"wine explorer");
+String[] argv=com.winlator.core.ProcessHelper.splitCommand(command);
+if(!argv[0].equals(loader.toString())||!argv[1].equals(bin.toString())||!argv[2].equals("wine"))throw new AssertionError(command);
+Files.delete(bin);
+try {com.winlator.core.GuestRuntimeCommand.create(root.toFile(),"wine");throw new AssertionError("Missing Box64 accepted");}catch(IllegalStateException expected){}
+System.out.println("PASS: package-independent loader command and missing Box64 rejection");
+}
+
 static void processFailureTest()throws Exception {
 java.util.concurrent.CountDownLatch done=new java.util.concurrent.CountDownLatch(1);
 java.util.concurrent.atomic.AtomicInteger status=new java.util.concurrent.atomic.AtomicInteger(99);
@@ -165,7 +178,7 @@ System.exit(0);
     test.parent.mkdir(parents=True, exist_ok=True)
     if (SOURCE / 'com/winlator/EduRunnerFolderImporter.java').exists():
         main = main.replace('public static void main(String[] args)', IMPORT_TEST + CRASH_TEST + '\npublic static void main(String[] args)')
-        main = main.replace('String name="Big English",rel=', 'importerTests(); crashAndRootfsTests(); processFailureTest();\nString name="Big English",rel=')
+        main = main.replace('String name="Big English",rel=', 'importerTests(); crashAndRootfsTests(); processFailureTest(); runtimeCommandTest();\nString name="Big English",rel=')
     test.write_text(main)
     files = list(tmp.rglob('*.java')) + [SOURCE / 'com/winlator/core/StringUtils.java', SOURCE / 'com/winlator/container/Shortcut.java']
     if helper.exists():
@@ -173,6 +186,6 @@ System.exit(0);
     importer = SOURCE / 'com/winlator/EduRunnerFolderImporter.java'
     if importer.exists():
         files.append(importer)
-        files.extend([SOURCE / 'com/winlator/EduRunnerCrashHandler.java', SOURCE / 'com/winlator/xenvironment/RootFS.java', SOURCE / 'com/winlator/core/ProcessHelper.java', SOURCE / 'com/winlator/core/EnvVars.java', SOURCE / 'com/winlator/core/Callback.java'])
+        files.extend([SOURCE / 'com/winlator/EduRunnerCrashHandler.java', SOURCE / 'com/winlator/xenvironment/RootFS.java', SOURCE / 'com/winlator/core/ProcessHelper.java', SOURCE / 'com/winlator/core/EnvVars.java', SOURCE / 'com/winlator/core/Callback.java', SOURCE / 'com/winlator/core/GuestRuntimeCommand.java'])
     subprocess.run(['javac', '-encoding', 'UTF-8', '-d', str(tmp / 'classes'), *map(str, files)], check=True)
     subprocess.run(['java', '-cp', str(tmp / 'classes'), 'com.winlator.Regression'], check=True, timeout=15)

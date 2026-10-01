@@ -13,6 +13,7 @@ import com.winlator.core.DefaultVersion;
 import com.winlator.core.EnvVars;
 import com.winlator.core.FileUtils;
 import com.winlator.core.GeneralComponents;
+import com.winlator.core.GuestRuntimeCommand;
 import com.winlator.core.LocaleHelper;
 import com.winlator.core.ProcessHelper;
 import com.winlator.widget.LogView;
@@ -105,7 +106,7 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
         File shmDir = new File(rootDir, "/tmp/shm");
         if (!shmDir.isDirectory()) shmDir.mkdirs();
 
-        String command = rootDir+"/usr/local/bin/box64 "+guestExecutable;
+        String command = GuestRuntimeCommand.create(rootDir, guestExecutable);
 
         return ProcessHelper.exec(command, envVars, rootDir, (status) -> {
             synchronized (lock) {
@@ -121,8 +122,12 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
         String box64Version = preferences.getString("box64_version", DefaultVersion.BOX64);
         String currentBox64Version = preferences.getString("current_box64_version", "");
 
-        if (!box64Version.equals(currentBox64Version)) {
+        File binary = new File(environment.getRootFS().getRootDir(), "usr/local/bin/box64");
+        if (!box64Version.equals(currentBox64Version) || !binary.isFile() || binary.length() == 0) {
             GeneralComponents.extractFile(GeneralComponents.Type.BOX64, context, box64Version, DefaultVersion.BOX64);
+            if (!binary.isFile() || binary.length() == 0) {
+                throw new IllegalStateException("Box64 installation failed: " + binary);
+            }
             preferences.edit().putString("current_box64_version", box64Version).apply();
         }
     }
