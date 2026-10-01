@@ -37,13 +37,21 @@ static void runtimeCommandTest()throws Exception {
 Path root=Files.createTempDirectory("runtime-package");
 Path bin=root.resolve("usr/local/bin/box64"),loader=root.resolve("usr/lib/ld-linux-aarch64.so.1");
 Files.createDirectories(bin.getParent()); Files.createDirectories(loader.getParent());
-Files.writeString(bin,"ELF"); Files.writeString(loader,"ELF");
+byte[] elf=new byte[256]; java.nio.ByteBuffer header=java.nio.ByteBuffer.wrap(elf).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+header.putInt(0,0x464c457f);elf[4]=2;elf[5]=1;header.putShort(18,(short)183);header.putLong(32,64);header.putShort(54,(short)56);header.putShort(56,(short)1);
+byte[] old="/data/data/com.winlator/files/rootfs/lib/ld-linux-aarch64.so.1\0".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+header.putInt(64,3);header.putLong(72,128);header.putLong(96,old.length);System.arraycopy(old,0,elf,128,old.length);
+Files.write(bin,elf); Files.writeString(loader,"ELF");
 String command=com.winlator.core.GuestRuntimeCommand.create(root.toFile(),"wine explorer");
 String[] argv=com.winlator.core.ProcessHelper.splitCommand(command);
-if(!argv[0].equals(loader.toString())||!argv[1].equals(bin.toString())||!argv[2].equals("wine"))throw new AssertionError(command);
+if(!argv[0].equals(bin.toString())||!argv[1].equals("wine"))throw new AssertionError(command);
+byte[] patched=Files.readAllBytes(bin);java.nio.ByteBuffer ph=java.nio.ByteBuffer.wrap(patched).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+int offset=(int)ph.getLong(72),size=(int)ph.getLong(96);
+if(!new String(patched,offset,size-1,java.nio.charset.StandardCharsets.UTF_8).equals(loader.toString()))throw new AssertionError("Interpreter not relocated");
+com.winlator.core.GuestRuntimeCommand.create(root.toFile(),"wine");if(Files.size(bin)!=patched.length)throw new AssertionError("Repeated patch grows binary");
 Files.delete(bin);
 try {com.winlator.core.GuestRuntimeCommand.create(root.toFile(),"wine");throw new AssertionError("Missing Box64 accepted");}catch(IllegalStateException expected){}
-System.out.println("PASS: package-independent loader command and missing Box64 rejection");
+System.out.println("PASS: relocated ELF interpreter, direct Box64 re-exec, idempotence and missing file rejection");
 }
 
 static void processFailureTest()throws Exception {
