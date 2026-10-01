@@ -136,6 +136,37 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
     public int frameRatingWindowId = -1;
     private Win32AppWorkarounds win32AppWorkarounds;
     private String screenEffectProfile;
+    private final android.os.Handler startupHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+    private PreloaderDialog startupPreloader;
+    private EduRunnerRunLog runtimeLog;
+    private volatile boolean startupWindowMapped;
+    private boolean startupFailureShown;
+    private volatile String startupStage = "Подготовка";
+    private final Runnable startupTimeout = () -> showStartupFailure("Программа не открыла окно за 90 секунд.");
+
+    private void startupStage(String stage) {
+        startupStage = stage;
+        if (runtimeLog != null) runtimeLog.call("STAGE: " + stage);
+    }
+
+    private void showStartupFailure(String message) {
+        runOnUiThread(() -> {
+            if (isFinishing() || isDestroyed() || startupFailureShown) return;
+            startupFailureShown = true;
+            startupHandler.removeCallbacks(startupTimeout);
+            if (startupPreloader != null) startupPreloader.close();
+            if (runtimeLog != null) runtimeLog.call("STARTUP FAILURE: " + message + "; stage=" + startupStage);
+            new android.app.AlertDialog.Builder(this).setTitle("Программа не запустилась")
+                    .setMessage(message + "\n\nЭтап: " + startupStage + "\nОтчёт: " +
+                            (runtimeLog != null ? runtimeLog.path() : "недоступен"))
+                    .setCancelable(false)
+                    .setPositiveButton("Закрыть", (dialog, which) -> exit())
+                    .setNegativeButton("Продолжить ждать", (dialog, which) -> {
+                        startupFailureShown = false;
+                        if (!startupWindowMapped) startupHandler.postDelayed(startupTimeout, 90000);
+                    }).show();
+        });
+    }
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -157,6 +188,11 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
 
         NavigationView navigationView = findViewById(R.id.NavigationView);
         ProcessHelper.removeAllDebugCallbacks();
+        if (getIntent().getBooleanExtra("edurunner_launcher", false)) {
+            runtimeLog = new EduRunnerRunLog(this);
+            ProcessHelper.addDebugCallback(runtimeLog);
+            startupPreloader = preloaderDialog;
+        }
         boolean enableLogs = preferences.getBoolean("enable_wine_debug", false) || preferences.getInt("box64_logs", 0) >= 1;
         if (enableLogs) ProcessHelper.addDebugCallback(debugDialog = new DebugDialog(this));
         Menu menu = navigationView.getMenu();
@@ -231,6 +267,12 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         }
 
         preloaderDialog.show(R.string.starting_up);
+        if (runtimeLog != null) {
+            startupStage("Подготовка файлов программы");
+            runtimeLog.call("Container=" + container.id + "; graphics=" + container.getGraphicsDriver() +
+                    "; EXE=" + (shortcut != null ? shortcut.path : "desktop"));
+            startupHandler.postDelayed(startupTimeout, 90000);
+        }
 
         inputControlsManager = new InputControlsManager(this);
         xServer = new XServer(this, screenInfo);
@@ -244,10 +286,14 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
 
             @Override
             public void onMapWindow(Window window) {
-                if (!flags[0] && window.isRenderable() && !window.getClassName().isEmpty()) {
+                if (!flags[0] && window.isRenderable() &&
+                        (!window.getClassName().isEmpty() || (runtimeLog != null && !window.isDesktopWindow()))) {
                     xServerView.getRenderer().setCursorVisible(true);
                     preloaderDialog.closeOnUiThread();
                     flags[0] = true;
+                    startupWindowMapped = true;
+                    startupHandler.removeCallbacks(startupTimeout);
+                    startupStage("Окно программы открыто");
                 }
 
                 if (flags[1] && window.attributes.isViewable() && window.isDesktopWindow()) {
@@ -268,12 +314,24 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         setupUI();
 
         Executors.newSingleThreadExecutor().execute(() -> {
-            if (!isGenerateWineprefix()) {
-                setupWineSystemFiles();
-                extractGraphicsDriverFiles();
-                changeWineAudioDriver();
+            try {
+                if (!isGenerateWineprefix()) {
+                    setupWineSystemFiles();
+                    startupStage("Подготовка графики");
+                    extractGraphicsDriverFiles();
+                    startupStage("Подготовка звука");
+                    changeWineAudioDriver();
+                }
+                if (isFinishing() || isDestroyed()) return;
+                startupStage("Запуск среды");
+                setupXEnvironment();
+            } catch (Exception error) {
+                if (runtimeLog == null) throw new RuntimeException(error);
+                java.io.StringWriter trace = new java.io.StringWriter();
+                error.printStackTrace(new java.io.PrintWriter(trace));
+                runtimeLog.call(trace.toString());
+                showStartupFailure("Ошибка подготовки: " + error);
             }
-            setupXEnvironment();
         });
     }
 
@@ -341,6 +399,12 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
 
     @Override
     protected void onDestroy() {
+        startupHandler.removeCallbacksAndMessages(null);
+        if (startupPreloader != null) startupPreloader.close();
+        if (runtimeLog != null) {
+            ProcessHelper.removeDebugCallback(runtimeLog);
+            runtimeLog.close();
+        }
         winHandler.stop();
         if (environment != null) environment.stopEnvironmentComponents();
         ForegroundService.stopSession(this);
@@ -519,6 +583,11 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         String wineDebugChannels = preferences.getString("wine_debug_channels", SettingsFragment.DEFAULT_WINE_DEBUG_CHANNELS);
         envVars.put("WINEDEBUG", enableWineDebug && !wineDebugChannels.isEmpty() ? "+"+wineDebugChannels.replace(",", ",+") : "-all");
 
+        if (runtimeLog != null) {
+            envVars.put("WINEDEBUG", "err+all,warn+all");
+            envVars.put("BOX64_LOG", "1");
+            envVars.put("BOX64_NOBANNER", "0");
+        }
         FileUtils.clear(rootFS.getTmpDir());
 
         GuestProgramLauncherComponent guestProgramLauncherComponent = new GuestProgramLauncherComponent();
@@ -529,6 +598,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             String desktopName = shortcut != null || getIntent().hasExtra("exec_path") ? "nogui" : "shell";
             String guestExecutable = "wine explorer /desktop="+desktopName+","+xServer.screenInfo+" "+getWineStartCommand();
             guestProgramLauncherComponent.setGuestExecutable(guestExecutable);
+            if (runtimeLog != null) runtimeLog.call("COMMAND: " + guestExecutable);
 
             envVars.putAll(container.getEnvVars());
             if (shortcut != null) envVars.putAll(shortcut.getExtra("envVars"));
@@ -572,7 +642,16 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         }
 
         guestProgramLauncherComponent.setEnvVars(envVars);
-        guestProgramLauncherComponent.setTerminationCallback((status) -> exit());
+        guestProgramLauncherComponent.setTerminationCallback((status) -> {
+            if (runtimeLog != null) {
+                runtimeLog.call("PROCESS EXIT: " + status);
+                if (!startupWindowMapped || status != 0) {
+                    showStartupFailure("Процесс завершился с кодом " + status + ".");
+                    return;
+                }
+            }
+            runOnUiThread(this::exit);
+        });
         environment.addComponent(guestProgramLauncherComponent);
 
         if (isGenerateWineprefix()) {
@@ -583,6 +662,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             envVars.putAll(overrideEnvVars);
             overrideEnvVars = null;
         }
+        startupStage("Запуск процесса, ожидание окна");
         environment.startEnvironmentComponents();
 
         winHandler.start();

@@ -69,14 +69,15 @@ public abstract class ProcessHelper {
 
     public static int exec(String command, EnvVars envVars, File workingDir, Callback<Integer> terminationCallback) {
         int pid = -1;
+        java.lang.Process process = null;
         try {
             ProcessBuilder processBuilder = (new ProcessBuilder(splitCommand(command))).directory(workingDir);
             if (debugCallbacks.isEmpty()) processBuilder.redirectOutput(new File("/dev/null")).redirectErrorStream(true);
 
             Map<String, String> environment = processBuilder.environment();
-            for (String name : envVars) environment.put(name, envVars.get(name));
+            if (envVars != null) for (String name : envVars) environment.put(name, envVars.get(name));
 
-            java.lang.Process process = processBuilder.start();
+            process = processBuilder.start();
             Field pidField = process.getClass().getDeclaredField("pid");
             pidField.setAccessible(true);
             pid = pidField.getInt(process);
@@ -89,7 +90,16 @@ public abstract class ProcessHelper {
 
             if (terminationCallback != null) createWaitForThread(process, terminationCallback);
         }
-        catch (Exception e) {}
+        catch (Exception e) {
+            if (process != null) process.destroy();
+            android.util.Log.e("EduRunner", "Cannot start process: " + command, e);
+            synchronized (debugCallbacks) {
+                for (Callback<String> callback : debugCallbacks) callback.call("PROCESS START FAILED: " + command + "\n" + e);
+            }
+            if (terminationCallback != null) {
+                Executors.newSingleThreadExecutor().execute(() -> terminationCallback.call(-1));
+            }
+        }
         return pid;
     }
 

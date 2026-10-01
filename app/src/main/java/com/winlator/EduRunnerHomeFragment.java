@@ -82,9 +82,20 @@ public class EduRunnerHomeFragment extends Fragment {
     }
 
     private void showSettings() {
-        String[] items = developerUnlocked ? new String[]{"О приложении", "Developer Mode"} : new String[]{"О приложении"};
+        String[] items = {"Добавить программу", "Программы", "Контейнеры / Runtime", "Совместимость", "Отладка", "О приложении"};
         new AlertDialog.Builder(requireContext()).setTitle("Настройки")
-                .setItems(items, (d, which) -> { if (which == 0) showAbout(); else showDeveloperPanel(); })
+                .setItems(items, (d, which) -> {
+                    if (busy) return;
+                    developerUnlocked = true;
+                    if (which == 0) {
+                        try { folderPicker.launch(null); }
+                        catch (Exception error) { showError("Выбор папки недоступен", error); }
+                    } else if (which == 1) showPrograms();
+                    else if (which == 2) openRuntimeSettings(R.id.menu_item_containers);
+                    else if (which == 3) openRuntimeSettings(R.id.menu_item_settings);
+                    else if (which == 4) showDebugInfo();
+                    else showAbout();
+                })
                 .setNegativeButton("Закрыть", null).show();
     }
 
@@ -176,7 +187,7 @@ public class EduRunnerHomeFragment extends Fragment {
     private void showDebugInfo() {
         Context context = requireContext();
         new AlertDialog.Builder(context).setTitle("Отладка")
-                .setMessage("Основные crash reports: /storage/emulated/0/GRXT/\n\nРезервный каталог: " +
+                .setMessage("Отчёты crash-*.txt и runtime-*.txt: /storage/emulated/0/GRXT/\n\nРезервный каталог: " +
                         context.getExternalFilesDir(null) + "/GRXT/\n\nКонтейнеров: " + manager.getContainers().size())
                 .setPositiveButton("Закрыть", null).show();
     }

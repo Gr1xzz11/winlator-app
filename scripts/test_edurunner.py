@@ -16,7 +16,7 @@ STUBS = {
 'org/json/JSONException.java': 'package org.json; public class JSONException extends Exception {}',
 'org/json/JSONObject.java': '''package org.json; public class JSONObject {private final java.util.Map<String,String> data=new java.util.LinkedHashMap<>(); public JSONObject put(String k,String v)throws JSONException{data.put(k,v);return this;} public boolean has(String k){return data.containsKey(k);} public String getString(String k)throws JSONException{return data.get(k);} public int length(){return data.size();} public java.util.Iterator<String> keys(){return data.keySet().iterator();} public void remove(String k){data.remove(k);}}''',
 'com/winlator/container/Container.java': '''package com.winlator.container; public class Container {public java.io.File getIconsDir(int n){return new java.io.File("/missing");} public static void checkObsoleteOrMissingProperties(org.json.JSONObject d){}}''',
-'com/winlator/core/FileUtils.java': '''package com.winlator.core; public class FileUtils {public static java.util.List<String> readLines(java.io.File f,boolean... trim){try{return java.nio.file.Files.readAllLines(f.toPath());}catch(Exception e){throw new RuntimeException(e);}} public static String getBasename(String p){return new java.io.File(p).getName().replaceFirst("\\\\.[^\\\\.]+$", "");} public static boolean writeString(java.io.File f,String s){try{java.nio.file.Files.writeString(f.toPath(),s);return true;}catch(Exception e){return false;}} public static String toRelativePath(String base,String path){return path;} public static void delete(java.io.File f){f.delete();}}''',
+'com/winlator/core/FileUtils.java': '''package com.winlator.core; public class FileUtils {public static java.util.List<String> readLines(java.io.File f,boolean... trim){try{return java.nio.file.Files.readAllLines(f.toPath());}catch(Exception e){throw new RuntimeException(e);}} public static String getBasename(String p){return new java.io.File(p).getName().replaceFirst("\\\\.[^\\\\.]+$", "");} public static boolean writeString(java.io.File f,String s){try{java.nio.file.Files.writeString(f.toPath(),s);return true;}catch(Exception e){return false;}} public static String getName(String path){return new java.io.File(path).getName();} public static String toRelativePath(String base,String path){return path;} public static void delete(java.io.File f){f.delete();}}''',
 'com/winlator/core/WineUtils.java': 'package com.winlator.core; public class WineUtils {public static String dosToUnixPath(String s,com.winlator.container.Container c){return s;}}',
 }
 
@@ -25,13 +25,30 @@ STUBS.update({
 'android/content/pm/PackageInfo.java': 'package android.content.pm; public class PackageInfo {public String versionName="0.2.0";public int versionCode=34;}',
 'android/os/Build.java': 'package android.os; public class Build {public static final String MANUFACTURER="TestManufacturer",MODEL="ARM64Panel",FINGERPRINT="fixture/fingerprint";public static class VERSION {public static final String RELEASE="15";public static final int SDK_INT=35;}}',
 'android/os/Environment.java': 'package android.os; public class Environment {public static java.io.File external;public static java.io.File getExternalStorageDirectory(){return external;}}',
+'android/os/Process.java': 'package android.os; public class Process {public static void sendSignal(int p,int s){}}',
+'android/system/Os.java': 'package android.system; public class Os {public static long sysconf(int n){return 4096;}public static int getpid(){return 1;}}',
+'android/system/OsConstants.java': 'package android.system; public class OsConstants {public static final int SIGSTOP=19,SIGCONT=18,SIGKILL=9,_SC_PAGESIZE=1;}',
+'android/util/Log.java': 'package android.util; public class Log {public static int e(String t,String m,Throwable e){return 0;}}',
+'com/winlator/MainActivity.java': 'package com.winlator; public class MainActivity {public static final boolean DEBUG_MODE=false;}',
 'androidx/annotation/NonNull.java': 'package androidx.annotation; public @interface NonNull {}',
 })
 CRASH_TEST = r'''
+static void processFailureTest()throws Exception {
+java.util.concurrent.CountDownLatch done=new java.util.concurrent.CountDownLatch(1);
+java.util.concurrent.atomic.AtomicInteger status=new java.util.concurrent.atomic.AtomicInteger(99);
+java.util.concurrent.atomic.AtomicReference<String> log=new java.util.concurrent.atomic.AtomicReference<>("");
+com.winlator.core.ProcessHelper.removeAllDebugCallbacks();
+com.winlator.core.ProcessHelper.addDebugCallback(line->log.set(line));
+int pid=com.winlator.core.ProcessHelper.exec("/definitely/missing/edurunner-test",new com.winlator.core.EnvVars(),null,code->{status.set(code);done.countDown();});
+if(pid!=-1||!done.await(2,java.util.concurrent.TimeUnit.SECONDS)||status.get()!=-1||!log.get().contains("PROCESS START FAILED"))throw new AssertionError("Process launch failure swallowed instead of logged/notified");
+com.winlator.core.ProcessHelper.removeAllDebugCallbacks();
+System.out.println("PASS: missing executable returns -1, logs failure and calls termination callback");
+}
 static void crashAndRootfsTests()throws Exception {
 Path base=Files.createTempDirectory("crash-log");
 android.content.Context context=new android.content.Context(base.toFile());
 android.os.Environment.external=base.resolve("shared").toFile();
+Thread.UncaughtExceptionHandler originalHandler=Thread.getDefaultUncaughtExceptionHandler();
 final int[] delegated={0};
 Thread.setDefaultUncaughtExceptionHandler((thread,error)->delegated[0]++);
 EduRunnerCrashHandler.install(context);
@@ -46,6 +63,7 @@ Path denied=base.resolve("denied");Files.writeString(denied,"not a directory");a
 Thread.getDefaultUncaughtExceptionHandler().uncaughtException(Thread.currentThread(),new IOException("fallback-test"));
 logs=new File(context.getExternalFilesDir(null),"GRXT").listFiles();
 if(logs==null||logs.length!=1||!Files.readString(logs[0].toPath()).contains("fallback-test"))throw new AssertionError("Fallback crash file missing");
+Thread.setDefaultUncaughtExceptionHandler(originalHandler);
 if(delegated[0]!=2)throw new AssertionError("Previous crash handler not invoked");
 com.winlator.xenvironment.RootFS root=com.winlator.xenvironment.RootFS.find(context);
 if(root.isValid()||root.getVersion()!=0)throw new AssertionError("Clean RootFS should not be ready");
@@ -137,6 +155,7 @@ String expected="C:\\GRXT\\Big English\\уроки\\Start App.EXE";
 if(!expected.equals(shortcut.path))throw new AssertionError("Shortcut path: expected ["+expected+"] got ["+shortcut.path+"]");
 if(shortcut.isLinkPath())throw new AssertionError("Local EXE classified as a URL/link");
 System.out.println("PASS: real Shortcut parser resolves nested EXE, spaces and Cyrillic without quotes");
+System.exit(0);
 }}
 '''.replace('GENERATION', generation)
     # Java DOS string constants require two backslashes in source.
@@ -146,7 +165,7 @@ System.out.println("PASS: real Shortcut parser resolves nested EXE, spaces and C
     test.parent.mkdir(parents=True, exist_ok=True)
     if (SOURCE / 'com/winlator/EduRunnerFolderImporter.java').exists():
         main = main.replace('public static void main(String[] args)', IMPORT_TEST + CRASH_TEST + '\npublic static void main(String[] args)')
-        main = main.replace('String name="Big English",rel=', 'importerTests(); crashAndRootfsTests();\nString name="Big English",rel=')
+        main = main.replace('String name="Big English",rel=', 'importerTests(); crashAndRootfsTests(); processFailureTest();\nString name="Big English",rel=')
     test.write_text(main)
     files = list(tmp.rglob('*.java')) + [SOURCE / 'com/winlator/core/StringUtils.java', SOURCE / 'com/winlator/container/Shortcut.java']
     if helper.exists():
@@ -154,6 +173,6 @@ System.out.println("PASS: real Shortcut parser resolves nested EXE, spaces and C
     importer = SOURCE / 'com/winlator/EduRunnerFolderImporter.java'
     if importer.exists():
         files.append(importer)
-        files.extend([SOURCE / 'com/winlator/EduRunnerCrashHandler.java', SOURCE / 'com/winlator/xenvironment/RootFS.java'])
+        files.extend([SOURCE / 'com/winlator/EduRunnerCrashHandler.java', SOURCE / 'com/winlator/xenvironment/RootFS.java', SOURCE / 'com/winlator/core/ProcessHelper.java', SOURCE / 'com/winlator/core/EnvVars.java', SOURCE / 'com/winlator/core/Callback.java'])
     subprocess.run(['javac', '-encoding', 'UTF-8', '-d', str(tmp / 'classes'), *map(str, files)], check=True)
-    subprocess.run(['java', '-cp', str(tmp / 'classes'), 'com.winlator.Regression'], check=True)
+    subprocess.run(['java', '-cp', str(tmp / 'classes'), 'com.winlator.Regression'], check=True, timeout=15)
