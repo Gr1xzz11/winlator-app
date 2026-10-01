@@ -1,24 +1,34 @@
 package com.winlator;
 
+import android.app.AlertDialog;
 import android.content.Intent;
 import android.os.Bundle;
+import android.text.InputType;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.EditText;
 import android.widget.TextView;
+import android.widget.Toast;
+
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+
 import com.winlator.container.ContainerManager;
 import com.winlator.container.Shortcut;
+
 import java.util.ArrayList;
 
 public class EduRunnerHomeFragment extends Fragment {
+    private static final String DEV_PIN = "1283256";
     private RecyclerView recyclerView;
     private TextView emptyView;
     private ContainerManager manager;
+    private int versionTaps = 0;
+    private long lastVersionTap = 0;
 
     @Nullable @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle state) {
@@ -30,16 +40,79 @@ public class EduRunnerHomeFragment extends Fragment {
         manager = new ContainerManager(requireContext());
         recyclerView = view.findViewById(R.id.ProgramGrid);
         emptyView = view.findViewById(R.id.EmptyPrograms);
-        recyclerView.setLayoutManager(new GridLayoutManager(requireContext(), getResources().getConfiguration().smallestScreenWidthDp >= 600 ? 3 : 2));
+        recyclerView.setLayoutManager(new GridLayoutManager(requireContext(),
+                getResources().getConfiguration().smallestScreenWidthDp >= 600 ? 3 : 2));
+
+        view.findViewById(R.id.AddProgramButton).setOnClickListener(v ->
+                Toast.makeText(requireContext(), "Импорт программы будет доступен в следующей сборке", Toast.LENGTH_SHORT).show());
+        view.findViewById(R.id.SettingsButton).setOnClickListener(v -> showSettings());
+        view.findViewById(R.id.VersionText).setOnClickListener(v -> onVersionTap());
         refresh();
     }
 
-    @Override public void onResume() { super.onResume(); if (manager != null) refresh(); }
+    private void showSettings() {
+        new AlertDialog.Builder(requireContext())
+                .setTitle("GRXT EduRunner")
+                .setMessage("Версия 0.1.0-winlator11.2\n\nДля запуска программ используется совместимый Wine/Box64 runtime.")
+                .setPositiveButton("Готово", null)
+                .show();
+    }
+
+    private void onVersionTap() {
+        long now = System.currentTimeMillis();
+        if (now - lastVersionTap > 2500) versionTaps = 0;
+        lastVersionTap = now;
+        versionTaps++;
+        if (versionTaps >= 7) {
+            versionTaps = 0;
+            showDeveloperPin();
+        }
+    }
+
+    private void showDeveloperPin() {
+        final EditText input = new EditText(requireContext());
+        input.setHint("PIN");
+        input.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_VARIATION_PASSWORD);
+        int pad = (int) (24 * getResources().getDisplayMetrics().density);
+        input.setPadding(pad, pad / 2, pad, pad / 2);
+
+        AlertDialog dialog = new AlertDialog.Builder(requireContext())
+                .setTitle("Developer Mode")
+                .setMessage("Введите PIN разработчика")
+                .setView(input)
+                .setNegativeButton("Отмена", null)
+                .setPositiveButton("Войти", null)
+                .create();
+        dialog.setOnShowListener(x -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            if (DEV_PIN.equals(input.getText().toString())) {
+                dialog.dismiss();
+                showDeveloperPanel();
+            } else {
+                input.setError("Неверный PIN");
+            }
+        }));
+        dialog.show();
+    }
+
+    private void showDeveloperPanel() {
+        String[] items = {"Программы", "Контейнеры и Runtime", "Экран и графика", "Совместимость", "Отладка", "Расширенные настройки"};
+        new AlertDialog.Builder(requireContext())
+                .setTitle("Developer Mode")
+                .setItems(items, (d, which) -> Toast.makeText(requireContext(), items[which] + " — скоро", Toast.LENGTH_SHORT).show())
+                .setNegativeButton("Закрыть", null)
+                .show();
+    }
+
+    @Override public void onResume() {
+        super.onResume();
+        if (manager != null) refresh();
+    }
 
     private void refresh() {
         ArrayList<Shortcut> items = manager.loadShortcuts(null);
         items.removeIf(s -> s.file.isDirectory());
         emptyView.setVisibility(items.isEmpty() ? View.VISIBLE : View.GONE);
+        recyclerView.setVisibility(items.isEmpty() ? View.GONE : View.VISIBLE);
         recyclerView.setAdapter(new Adapter(items));
     }
 
@@ -54,19 +127,25 @@ public class EduRunnerHomeFragment extends Fragment {
         private final ArrayList<Shortcut> items;
         Adapter(ArrayList<Shortcut> items) { this.items = items; }
         class Holder extends RecyclerView.ViewHolder {
-            android.widget.ImageView icon; TextView title, subtitle;
-            Holder(View v) { super(v); icon=v.findViewById(R.id.ProgramIcon); title=v.findViewById(R.id.ProgramTitle); subtitle=v.findViewById(R.id.ProgramSubtitle); }
+            android.widget.ImageView icon;
+            TextView title, subtitle;
+            Holder(View v) {
+                super(v);
+                icon = v.findViewById(R.id.ProgramIcon);
+                title = v.findViewById(R.id.ProgramTitle);
+                subtitle = v.findViewById(R.id.ProgramSubtitle);
+            }
         }
         @NonNull @Override public Holder onCreateViewHolder(@NonNull ViewGroup p, int t) {
             return new Holder(LayoutInflater.from(p.getContext()).inflate(R.layout.edurunner_program_card, p, false));
         }
         @Override public void onBindViewHolder(@NonNull Holder h, int pos) {
-            Shortcut s=items.get(pos);
+            Shortcut s = items.get(pos);
             if (s.icon != null) h.icon.setImageBitmap(s.icon); else h.icon.setImageResource(R.mipmap.ic_launcher);
             h.title.setText(s.name);
-            h.subtitle.setText(s.container.getName());
+            h.subtitle.setText("Нажмите для запуска");
             h.itemView.setOnClickListener(v -> run(s));
         }
-        @Override public int getItemCount(){ return items.size(); }
+        @Override public int getItemCount() { return items.size(); }
     }
 }
