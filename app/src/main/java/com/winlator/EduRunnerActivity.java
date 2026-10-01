@@ -52,7 +52,7 @@ public class EduRunnerActivity extends AppCompatActivity {
                 android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
     }
 
-    @Override protected void onWindowFocusChanged(boolean hasFocus) {
+    @Override public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
         if (hasFocus) enterImmersiveMode();
     }
