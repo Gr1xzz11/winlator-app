@@ -185,8 +185,10 @@ public class EduRunnerHomeFragment extends Fragment {
                         String winPath = "C:\\\\GRXT\\\\" + exe.getName();
                         String content = "[Desktop Entry]\\n" +
                                 "Name=" + programName + "\\n" +
-                                "Exec=wine " + winPath + "\\n" +
-                                "Type=Application\\n";
+                                "Exec=env WINEPREFIX=\\\"$HOME/.wine\\\" wine " + winPath + "\\n" +
+                                "Type=Application\\n" +
+                                "\\n[Extra Data]\\n" +
+                                "grxtExecPath=" + exe.getAbsolutePath() + "\\n";
                         FileUtils.writeString(shortcut, content);
 
                         requireActivity().runOnUiThread(() -> {
@@ -235,7 +237,12 @@ public class EduRunnerHomeFragment extends Fragment {
     private void run(Shortcut shortcut) {
         Intent intent = new Intent(requireContext(), XServerDisplayActivity.class);
         intent.putExtra("container_id", shortcut.container.id);
-        intent.putExtra("shortcut_path", shortcut.file.getPath());
+        String grxtExecPath = shortcut.getExtra("grxtExecPath");
+        if (!grxtExecPath.isEmpty()) {
+            intent.putExtra("exec_path", grxtExecPath);
+        } else {
+            intent.putExtra("shortcut_path", shortcut.file.getPath());
+        }
         startActivity(intent);
     }
 
