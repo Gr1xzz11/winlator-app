@@ -13,7 +13,7 @@ import java.lang.ref.WeakReference;
 
 public class NotificationUtils {
     private static final String CHANNEL_ID = "winlator_foreground_service";
-    private static final String CHANNEL_NAME = "Winlator Foreground Service";
+    private static final String CHANNEL_NAME = "GRXT EduRunner";
 
     private final Context context;
     private final NotificationManager notificationManager;
@@ -59,7 +59,7 @@ public class NotificationUtils {
      * Sends or updates a notification with all parameters.
      */
     public void notify(int id, String content, String title, Class<?> serviceClass, String exitAction) {
-        Notification notification = createForegroundNotification(content, title, serviceClass, exitAction, MainActivity.class);
+        Notification notification = createForegroundNotification(content, title, serviceClass, exitAction, com.winlator.EduRunnerActivity.class);
         notificationManager.notify(id, notification);
     }
 
@@ -136,7 +136,7 @@ public class NotificationUtils {
      */
     public void createNotificationChannel(Context context, String channelId, String name, int importance, String desc) {
         NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
-        if (nm != null && nm.getNotificationChannel(channelId) == null) {
+        if (nm != null) {
             NotificationChannel channel = new NotificationChannel(channelId, name, importance);
             if (desc != null && !desc.isEmpty()) {
                 channel.setDescription(desc);
@@ -163,7 +163,7 @@ public class NotificationUtils {
                 CHANNEL_ID,
                 CHANNEL_NAME,
                 NotificationManager.IMPORTANCE_LOW,
-                "Allows to display Winlator foreground notifications"
+                "Уведомления о работе учебной программы"
         );
     }
 
@@ -181,7 +181,6 @@ public class NotificationUtils {
         return contextKey.hashCode() & 0x7FFFFFFF; // Avoid negative IDs
     }
 }
-
 
 
 
