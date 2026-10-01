@@ -1,7 +1,17 @@
 package com.winlator;
 
 import android.app.AlertDialog;
+import android.app.Activity;
 import android.content.Intent;
+import android.database.Cursor;
+import android.net.Uri;
+import android.provider.OpenableColumns;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import org.json.JSONObject;
+import com.winlator.container.Container;
+import com.winlator.core.FileUtils;
 import android.os.Bundle;
 import android.text.InputType;
 import android.view.LayoutInflater;
@@ -24,6 +34,7 @@ import java.util.ArrayList;
 
 public class EduRunnerHomeFragment extends Fragment {
     private static final String DEV_PIN = "1283256";
+    private static final int PICK_EXE = 2201;
     private RecyclerView recyclerView;
     private View emptyView;
     private ContainerManager manager;
@@ -59,7 +70,7 @@ public class EduRunnerHomeFragment extends Fragment {
     private void showAbout() {
         TextView version = new TextView(requireContext());
         version.setText("GRXT EduRunner\n\nВерсия 0.1.0-winlator11.2");
-        version.setTextColor(0xFFFFFFFF);
+        version.setTextColor(0xFF111827);
         version.setTextSize(18);
         version.setGravity(android.view.Gravity.CENTER);
         int pad = (int) (28 * getResources().getDisplayMetrics().density);
@@ -110,12 +121,105 @@ public class EduRunnerHomeFragment extends Fragment {
     }
 
     private void showDeveloperPanel() {
-        String[] items = {"Программы", "Контейнеры и Runtime", "Экран и графика", "Совместимость", "Отладка", "Расширенные настройки"};
+        String[] items = {"Добавить программу (.exe)", "Контейнеры и Runtime", "Экран и графика", "Совместимость", "Отладка", "Расширенные настройки"};
         new AlertDialog.Builder(requireContext())
                 .setTitle("Developer Mode")
-                .setItems(items, (d, which) -> Toast.makeText(requireContext(), items[which] + " — скоро", Toast.LENGTH_SHORT).show())
+                .setItems(items, (d, which) -> {
+                    if (which == 0) pickExe();
+                    else Toast.makeText(requireContext(), items[which] + " — позже", Toast.LENGTH_SHORT).show();
+                })
                 .setNegativeButton("Закрыть", null)
                 .show();
+    }
+
+
+    private void pickExe() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("*/*");
+        intent.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{
+                "application/x-msdownload", "application/octet-stream", "application/x-msdos-program"
+        });
+        startActivityForResult(intent, PICK_EXE);
+    }
+
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == PICK_EXE && resultCode == Activity.RESULT_OK && data != null && data.getData() != null) {
+            importExe(data.getData());
+        }
+    }
+
+    private void importExe(Uri uri) {
+        final String displayName = getDisplayName(uri);
+        if (!displayName.toLowerCase().endsWith(".exe")) {
+            Toast.makeText(requireContext(), "Выберите файл .exe", Toast.LENGTH_LONG).show();
+            return;
+        }
+        final String programName = displayName.substring(0, displayName.length() - 4);
+        Toast.makeText(requireContext(), "Установка " + programName + "…", Toast.LENGTH_SHORT).show();
+
+        try {
+            JSONObject config = new JSONObject();
+            config.put("name", programName);
+            config.put("wincomponents", Container.DEFAULT_WINCOMPONENTS);
+            manager.createContainerAsync(config, container -> {
+                if (container == null) {
+                    Toast.makeText(requireContext(), "Не удалось создать контейнер", Toast.LENGTH_LONG).show();
+                    return;
+                }
+                new Thread(() -> {
+                    try {
+                        File appDir = new File(container.getRootDir(), ".wine/drive_c/GRXT");
+                        if (!appDir.exists() && !appDir.mkdirs()) throw new Exception("Cannot create C:\\GRXT");
+                        File exe = new File(appDir, displayName.replaceAll("[^a-zA-Z0-9._ -]", "_"));
+                        try (InputStream in = requireContext().getContentResolver().openInputStream(uri);
+                             FileOutputStream out = new FileOutputStream(exe)) {
+                            if (in == null) throw new Exception("Cannot open selected file");
+                            byte[] buffer = new byte[1024 * 128];
+                            int n;
+                            while ((n = in.read(buffer)) > 0) out.write(buffer, 0, n);
+                        }
+
+                        File desktop = new File(container.getUserDir(), "Desktop");
+                        if (!desktop.exists()) desktop.mkdirs();
+                        File shortcut = new File(desktop, programName.replaceAll("[^a-zA-Z0-9._ -]", "_") + ".desktop");
+                        String winPath = "C:\\\\GRXT\\\\" + exe.getName();
+                        String content = "[Desktop Entry]\\n" +
+                                "Name=" + programName + "\\n" +
+                                "Exec=wine " + winPath + "\\n" +
+                                "Type=Application\\n";
+                        FileUtils.writeString(shortcut, content);
+
+                        requireActivity().runOnUiThread(() -> {
+                            manager = new ContainerManager(requireContext());
+                            refresh();
+                            Toast.makeText(requireContext(), programName + " установлен", Toast.LENGTH_LONG).show();
+                        });
+                    } catch (Exception e) {
+                        requireActivity().runOnUiThread(() ->
+                                Toast.makeText(requireContext(), "Ошибка установки: " + e.getMessage(), Toast.LENGTH_LONG).show());
+                    }
+                }).start();
+            });
+        } catch (Exception e) {
+            Toast.makeText(requireContext(), "Ошибка: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private String getDisplayName(Uri uri) {
+        String name = "program.exe";
+        Cursor cursor = requireContext().getContentResolver().query(uri, null, null, null, null);
+        if (cursor != null) {
+            try {
+                int index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
+                if (index >= 0 && cursor.moveToFirst()) name = cursor.getString(index);
+            } finally {
+                cursor.close();
+            }
+        }
+        return name;
     }
 
     @Override public void onResume() {
