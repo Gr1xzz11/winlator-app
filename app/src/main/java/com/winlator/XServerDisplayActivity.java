@@ -264,12 +264,22 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             this.graphicsDriverConfig = GraphicsDrivers.parseConfigs(graphicsDriver, graphicsDriverConfig);
             this.dxwrapper = DXWrappers.parseIdentifier(dxwrapper);
             this.dxwrapperConfig = DXWrappers.parseConfigs(dxwrapper, dxwrapperConfig);
+
+            // Big English's Flash renderer hits Gladio texture upload failures on Mali.
+            // Use the bundled VirGL OpenGL path for this application with WineD3D.
+            if (shortcut != null && "t".equals(shortcut.getExtra("edurunner"))
+                    && "Big_English.exe".equalsIgnoreCase(FileUtils.getName(shortcut.path))
+                    && DXWrappers.WINED3D.equals(this.dxwrapper)
+                    && GraphicsDrivers.GLADIO.equals(this.graphicsDriver[1])) {
+                this.graphicsDriver[1] = GraphicsDrivers.VIRGL;
+                this.graphicsDriverConfig[1] = new KeyValueSet();
+            }
         }
 
         preloaderDialog.show(R.string.starting_up);
         if (runtimeLog != null) {
             startupStage("Подготовка файлов программы");
-            runtimeLog.call("Container=" + container.id + "; graphics=" + container.getGraphicsDriver() +
+            runtimeLog.call("Container=" + container.id + "; graphics=" + String.join(",", this.graphicsDriver) +
                     "; EXE=" + (shortcut != null ? shortcut.path : "desktop"));
             startupHandler.postDelayed(startupTimeout, 90000);
         }
