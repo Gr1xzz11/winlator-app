@@ -42,7 +42,7 @@ public abstract class WineUtils {
         }
 
         for (Drive drive : container.drivesIterator()) {
-            File linkTarget = new File(drive.path);
+            File linkTarget = new File(drive.path.replace("/data/data/com.winlator/storage", AppUtils.INTERNAL_STORAGE));
             String path = linkTarget.getAbsolutePath();
             if (!linkTarget.isDirectory() && path.startsWith(AppUtils.INTERNAL_STORAGE)) {
                 linkTarget.mkdirs();

@@ -33,6 +33,27 @@ STUBS.update({
 'androidx/annotation/NonNull.java': 'package androidx.annotation; public @interface NonNull {}',
 })
 CRASH_TEST = r'''
+static void runtimePathsTest()throws Exception {
+Path base=Files.createTempDirectory("rp");Path files=Files.createDirectories(base.resolve("f"));Path root=Files.createDirectories(files.resolve("rootfs"));
+com.winlator.core.RuntimePaths.initialize(files.toFile());
+Path binary=Files.createDirectories(root.resolve("opt/wine/bin")).resolve("wineserver");
+byte[] old="/data/data/com.winlator/files/rootfs".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+byte[] content=new byte[131100];java.util.Arrays.fill(content,(byte)'!');
+for(int offset:new int[]{0,65530,131060})System.arraycopy(old,0,content,offset,old.length);
+Files.write(binary,content);
+Path link=binary.getParent().resolve("runtime-link");Files.createSymbolicLink(link,java.nio.file.Paths.get("/data/data/com.winlator/files/rootfs/opt/wine/bin/wineserver"));
+com.winlator.core.RuntimePaths.migrate();
+if(!Files.isSameFile(link,binary))throw new AssertionError("Runtime symlink not relocated");byte[] patched=Files.readAllBytes(binary);
+if(patched.length!=content.length)throw new AssertionError("Binary size changed");
+String text=new String(patched,java.nio.charset.StandardCharsets.UTF_8);
+if(text.contains("com.winlator"))throw new AssertionError("Missed runtime path across block boundary");
+if(!Files.isSameFile(base.resolve("r"),root))throw new AssertionError("Alias wrong");
+com.winlator.core.RuntimePaths.patchExtracted(binary.toFile());if(!java.util.Arrays.equals(patched,Files.readAllBytes(binary)))throw new AssertionError("Not idempotent");
+Path driver=root.resolve("opt/driver.so");Files.write(driver,old);com.winlator.core.RuntimePaths.patchExtracted(driver.toFile());
+if(new String(Files.readAllBytes(driver),java.nio.charset.StandardCharsets.UTF_8).contains("com.winlator"))throw new AssertionError("New extraction unpatched");
+System.out.println("PASS: installed runtime migration, new extraction, block boundaries, alias and exact binary size");
+}
+
 static void runtimeCommandTest()throws Exception {
 Path root=Files.createTempDirectory("runtime-package");
 Path bin=root.resolve("usr/local/bin/box64"),loader=root.resolve("usr/lib/ld-linux-aarch64.so.1");
@@ -186,7 +207,7 @@ System.exit(0);
     test.parent.mkdir(parents=True, exist_ok=True)
     if (SOURCE / 'com/winlator/EduRunnerFolderImporter.java').exists():
         main = main.replace('public static void main(String[] args)', IMPORT_TEST + CRASH_TEST + '\npublic static void main(String[] args)')
-        main = main.replace('String name="Big English",rel=', 'importerTests(); crashAndRootfsTests(); processFailureTest(); runtimeCommandTest();\nString name="Big English",rel=')
+        main = main.replace('String name="Big English",rel=', 'importerTests(); crashAndRootfsTests(); processFailureTest(); runtimeCommandTest(); runtimePathsTest();\nString name="Big English",rel=')
     test.write_text(main)
     files = list(tmp.rglob('*.java')) + [SOURCE / 'com/winlator/core/StringUtils.java', SOURCE / 'com/winlator/container/Shortcut.java']
     if helper.exists():
@@ -194,6 +215,6 @@ System.exit(0);
     importer = SOURCE / 'com/winlator/EduRunnerFolderImporter.java'
     if importer.exists():
         files.append(importer)
-        files.extend([SOURCE / 'com/winlator/EduRunnerCrashHandler.java', SOURCE / 'com/winlator/xenvironment/RootFS.java', SOURCE / 'com/winlator/core/ProcessHelper.java', SOURCE / 'com/winlator/core/EnvVars.java', SOURCE / 'com/winlator/core/Callback.java', SOURCE / 'com/winlator/core/GuestRuntimeCommand.java'])
+        files.extend([SOURCE / 'com/winlator/EduRunnerCrashHandler.java', SOURCE / 'com/winlator/xenvironment/RootFS.java', SOURCE / 'com/winlator/core/ProcessHelper.java', SOURCE / 'com/winlator/core/EnvVars.java', SOURCE / 'com/winlator/core/Callback.java', SOURCE / 'com/winlator/core/GuestRuntimeCommand.java', SOURCE / 'com/winlator/core/RuntimePaths.java'])
     subprocess.run(['javac', '-encoding', 'UTF-8', '-d', str(tmp / 'classes'), *map(str, files)], check=True)
     subprocess.run(['java', '-cp', str(tmp / 'classes'), 'com.winlator.Regression'], check=True, timeout=15)

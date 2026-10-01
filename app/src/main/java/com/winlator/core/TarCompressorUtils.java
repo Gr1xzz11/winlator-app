@@ -164,7 +164,7 @@ public abstract class TarCompressorUtils {
                 }
                 else {
                     if (entry.isSymbolicLink()) {
-                        FileUtils.symlink(entry.getLinkName(), file.getAbsolutePath());
+                        FileUtils.symlink(RuntimePaths.relocatePath(entry.getLinkName()), file.getAbsolutePath());
                     }
                     else {
                         try (BufferedOutputStream outStream = new BufferedOutputStream(new FileOutputStream(file), StreamUtils.BUFFER_SIZE)) {
@@ -173,6 +173,7 @@ public abstract class TarCompressorUtils {
                     }
                 }
 
+                RuntimePaths.patchExtracted(file);
                 FileUtils.chmod(file, 0771);
             }
             return true;

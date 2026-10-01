@@ -315,6 +315,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
 
         Executors.newSingleThreadExecutor().execute(() -> {
             try {
+                com.winlator.core.RuntimePaths.migrate();
                 if (!isGenerateWineprefix()) {
                     setupWineSystemFiles();
                     startupStage("Подготовка графики");
