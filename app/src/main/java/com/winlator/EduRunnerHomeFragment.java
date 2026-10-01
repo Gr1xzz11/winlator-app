@@ -25,7 +25,7 @@ import java.util.ArrayList;
 public class EduRunnerHomeFragment extends Fragment {
     private static final String DEV_PIN = "1283256";
     private RecyclerView recyclerView;
-    private TextView emptyView;
+    private View emptyView;
     private ContainerManager manager;
     private int versionTaps = 0;
     private long lastVersionTap = 0;
