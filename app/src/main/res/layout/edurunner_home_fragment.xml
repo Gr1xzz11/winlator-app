@@ -1,51 +1,39 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent" android:layout_height="match_parent"
-    android:orientation="vertical" android:padding="28dp" android:background="#090E1A">
+    android:orientation="vertical" android:paddingLeft="32dp" android:paddingRight="32dp"
+    android:paddingTop="24dp" android:paddingBottom="24dp" android:background="#080D18">
 
-    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+    <LinearLayout android:layout_width="match_parent" android:layout_height="64dp"
         android:gravity="center_vertical" android:orientation="horizontal">
         <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
             android:layout_weight="1" android:orientation="vertical">
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:text="GRXT EduRunner" android:textColor="#FFFFFF" android:textStyle="bold" android:textSize="30sp"/>
+                android:text="GRXT EduRunner" android:textColor="#FFFFFF" android:textStyle="bold" android:textSize="24sp"/>
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:text="Учебные программы — в один запуск" android:textColor="#8F9DBB"
-                android:textSize="15sp" android:layout_marginTop="3dp"/>
+                android:text="Выберите программу" android:textColor="#7886A3" android:textSize="14sp" android:layout_marginTop="2dp"/>
         </LinearLayout>
-
-        <TextView android:id="@+id/AddProgramButton" android:layout_width="wrap_content"
-            android:layout_height="52dp" android:gravity="center" android:paddingLeft="22dp"
-            android:paddingRight="22dp" android:text="+  Добавить программу" android:textColor="#FFFFFF"
-            android:textStyle="bold" android:textSize="16sp" android:background="@drawable/edurunner_primary_button"/>
-
-        <TextView android:id="@+id/SettingsButton" android:layout_width="52dp" android:layout_height="52dp"
-            android:layout_marginLeft="12dp" android:gravity="center" android:text="⚙"
-            android:textColor="#FFFFFF" android:textSize="24sp" android:background="@drawable/edurunner_card"/>
+        <ImageButton android:id="@+id/SettingsButton" android:layout_width="48dp" android:layout_height="48dp"
+            android:padding="13dp" android:src="@drawable/edurunner_settings" android:tint="#AAB6CF"
+            android:contentDescription="Настройки" android:background="@drawable/edurunner_icon_button"/>
     </LinearLayout>
 
-    <View android:layout_width="match_parent" android:layout_height="1dp"
-        android:layout_marginTop="22dp" android:layout_marginBottom="18dp" android:background="#202A3E"/>
-
-    <FrameLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1">
+    <FrameLayout android:layout_width="match_parent" android:layout_height="0dp"
+        android:layout_weight="1" android:layout_marginTop="12dp">
         <LinearLayout android:id="@+id/EmptyPrograms" android:layout_width="match_parent"
             android:layout_height="match_parent" android:gravity="center" android:orientation="vertical">
-            <TextView android:layout_width="88dp" android:layout_height="88dp" android:gravity="center"
-                android:text="▶" android:textColor="#A78BFA" android:textSize="42sp"
-                android:background="@drawable/edurunner_card"/>
+            <TextView android:layout_width="84dp" android:layout_height="84dp" android:gravity="center"
+                android:text="▶" android:textColor="#9B7BFF" android:textSize="38sp"
+                android:background="@drawable/edurunner_empty_icon"/>
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:layout_marginTop="22dp" android:text="Здесь появятся ваши программы"
-                android:textColor="#FFFFFF" android:textStyle="bold" android:textSize="22sp"/>
+                android:layout_marginTop="20dp" android:text="Программы пока не установлены"
+                android:textColor="#F5F7FF" android:textStyle="bold" android:textSize="20sp"/>
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:layout_marginTop="7dp" android:text="Добавьте учебную программу, чтобы запускать её одним нажатием"
-                android:textColor="#8F9DBB" android:textSize="15sp"/>
+                android:layout_marginTop="6dp" android:text="Обратитесь к администратору"
+                android:textColor="#71809E" android:textSize="14sp"/>
         </LinearLayout>
         <androidx.recyclerview.widget.RecyclerView android:id="@+id/ProgramGrid"
-            android:layout_width="match_parent" android:layout_height="match_parent"/>
+            android:layout_width="match_parent" android:layout_height="match_parent"
+            android:clipToPadding="false" android:paddingTop="4dp" android:paddingBottom="12dp"/>
     </FrameLayout>
-
-    <TextView android:id="@+id/VersionText" android:layout_width="wrap_content"
-        android:layout_height="wrap_content" android:layout_gravity="center_horizontal"
-        android:padding="10dp" android:text="GRXT EduRunner  •  0.1.0"
-        android:textColor="#56627A" android:textSize="12sp"/>
 </LinearLayout>
