@@ -30,6 +30,9 @@ jobs:
       - name: Make Gradle wrapper executable
         run: chmod +x gradlew
 
+      - name: Verify folder import and native shortcut format
+        run: python3 scripts/test_edurunner.py
+
       - name: Build debug APK
         run: ./gradlew assembleDebug --no-daemon --max-workers=2
 

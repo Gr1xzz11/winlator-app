@@ -72,9 +72,16 @@ public class ContainerManager {
     }
 
     public void createContainerAsync(final JSONObject data, Callback<Container> callback) {
-        final Handler handler = new Handler();
+        final Handler handler = new Handler(android.os.Looper.getMainLooper());
         Executors.newSingleThreadExecutor().execute(() -> {
-            final Container container = createContainer(data);
+            Container created = null;
+            try {
+                created = createContainer(data);
+            } catch (Exception error) {
+                android.util.Log.e("EduRunner", "Cannot create container", error);
+                FileUtils.delete(new File(homeDir, RootFS.USER + "-" + (maxContainerId + 1)));
+            }
+            final Container container = created;
             handler.post(() -> callback.call(container));
         });
     }
@@ -88,7 +95,7 @@ public class ContainerManager {
     }
 
     public void removeContainerAsync(Container container, Runnable callback) {
-        final Handler handler = new Handler();
+        final Handler handler = new Handler(android.os.Looper.getMainLooper());
         Executors.newSingleThreadExecutor().execute(() -> {
             removeContainer(container);
             handler.post(callback);
