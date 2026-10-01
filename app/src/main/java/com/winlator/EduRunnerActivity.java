@@ -5,6 +5,11 @@ import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.Build;
+import android.os.Environment;
+import android.provider.Settings;
+import android.net.Uri;
+import android.content.Intent;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -23,14 +28,28 @@ public class EduRunnerActivity extends AppCompatActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        EduRunnerCrashHandler.install(this);
         AppUtils.setActivityTheme(this);
         super.onCreate(savedInstanceState);
         setContentView(R.layout.edurunner_activity);
+        requestCrashLogStorageAccess();
 
         if (runtimeReady()) {
             showHome();
         } else if (!requestAppPermissions()) {
             startRuntimeSetup();
+        }
+    }
+
+    private void requestCrashLogStorageAccess() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !Environment.isExternalStorageManager()) {
+            try {
+                Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
+                intent.setData(Uri.parse("package:" + getPackageName()));
+                startActivity(intent);
+            } catch (Exception ignored) {
+                startActivity(new Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION));
+            }
         }
     }
 
