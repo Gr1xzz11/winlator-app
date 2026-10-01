@@ -64,7 +64,7 @@ public abstract class RootFSInstaller {
         File rootDir = rootFS.getRootDir();
         SettingsFragment.resetPreferenceVersions(activity);
         final DownloadProgressDialog dialog = new DownloadProgressDialog(activity);
-        dialog.show(R.string.installing_system_files);
+        dialog.show(activity instanceof com.winlator.EduRunnerActivity ? R.string.edurunner_preparing : R.string.installing_system_files);
         INSTALLER.execute(() -> {
             boolean success = false;
             try {

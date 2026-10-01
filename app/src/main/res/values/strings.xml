@@ -352,10 +352,11 @@
     <string name="ddraw_wrapper" translatable="false">DDraw Wrapper</string>
     <string name="renderer">Renderer</string>
     <string name="default_no_override">Default (No override)</string>
-    <string name="fgs_notification_channel_desc">Keeps GRXT EduRunner running in the background so a wine session is not interrupted by Android\'s background process management.</string>
-    <string name="fgs_notification_content_container_background">A container session is running in the background</string>
-    <string name="fgs_notification_content_container_foreground">There is a container session running</string>
-    <string name="fgs_notification_content_else">GRXT EduRunner is running in the background</string>
+    <string name="fgs_notification_channel_desc">Поддерживает работу учебной программы в фоновом режиме.</string>
+    <string name="fgs_notification_content_container_background">Учебная программа работает в фоне</string>
+    <string name="fgs_notification_content_container_foreground">Учебная программа запущена</string>
+    <string name="fgs_notification_content_else">GRXT EduRunner работает в фоне</string>
     <string name="save_mem_on_run_from_steam">Save memory on run from Steam</string>
     <string name="present_mode">Present Mode</string>
+    <string name="edurunner_preparing">Подготовка среды запуска…</string>
 </resources>

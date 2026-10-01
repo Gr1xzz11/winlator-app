@@ -349,12 +349,28 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
 
     @Override
     public void onBackPressed() {
+        if (getIntent().getBooleanExtra("edurunner_launcher", false)) {
+            showEduRunnerMenu();
+            return;
+        }
         if (environment != null) {
             if (!drawerLayout.isDrawerOpen(GravityCompat.START)) {
                 drawerLayout.openDrawer(GravityCompat.START);
             }
             else drawerLayout.closeDrawers();
         }
+    }
+
+    private void showEduRunnerMenu() {
+        new android.app.AlertDialog.Builder(this).setTitle("GRXT EduRunner")
+                .setItems(new String[]{"Клавиатура", "Вернуться к программам"}, (dialog, which) -> {
+                    if (which == 0) AppUtils.showKeyboard(this);
+                    else new android.app.AlertDialog.Builder(this)
+                            .setTitle("Закрыть программу?")
+                            .setMessage("Сохраните свою работу перед выходом.")
+                            .setPositiveButton("Закрыть", (confirmation, button) -> exit())
+                            .setNegativeButton("Отмена", null).show();
+                }).setNegativeButton("Продолжить", null).show();
     }
 
     @Override
@@ -595,8 +611,13 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         capturePointerOnExternalMouse = preferences.getBoolean("capture_pointer_on_external_mouse", true);
         touchpadView = new TouchpadView(this, xServer, capturePointerOnExternalMouse);
         touchpadView.setSensitivity(globalCursorSpeed);
-        touchpadView.setMoveCursorToTouchpoint(preferences.getBoolean("move_cursor_to_touchpoint", false));
+        touchpadView.setMoveCursorToTouchpoint(getIntent().getBooleanExtra("edurunner_launcher", false) ||
+                preferences.getBoolean("move_cursor_to_touchpoint", false));
         touchpadView.setFourFingersTapCallback(() -> {
+            if (getIntent().getBooleanExtra("edurunner_launcher", false)) {
+                showEduRunnerMenu();
+                return;
+            }
             if (!drawerLayout.isDrawerOpen(GravityCompat.START)) drawerLayout.openDrawer(GravityCompat.START);
         });
         rootView.addView(touchpadView);

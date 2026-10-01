@@ -10,15 +10,55 @@ import tempfile
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 SOURCE = ROOT / 'app/src/main/java'
 STUBS = {
-'android/content/Context.java': '''package android.content; public class Context { public String getPackageName(){return "test";} public Resources getResources(){return new Resources();} public String getString(int n){return "";} public static class Resources {public int getIdentifier(String a,String b,String c){return 0;}}}''',
+'android/content/Context.java': '''package android.content; public class Context {public java.io.File base; public Context(){this(new java.io.File(System.getProperty("java.io.tmpdir"),"fixture"));} public Context(java.io.File base){this.base=base;} public Context getApplicationContext(){return this;} public java.io.File getFilesDir(){return new java.io.File(base,"private");} public java.io.File getExternalFilesDir(String t){return new java.io.File(base,"external");} public android.content.pm.PackageManager getPackageManager(){return new android.content.pm.PackageManager();} public String getPackageName(){return "dev.grxt.edurunner";} public Resources getResources(){return new Resources();} public String getString(int n){return "";} public static class Resources {public int getIdentifier(String a,String b,String c){return 0;}}}''',
 'android/graphics/Bitmap.java': 'package android.graphics; public class Bitmap {}',
 'android/graphics/BitmapFactory.java': 'package android.graphics; public class BitmapFactory {public static Bitmap decodeFile(String x){return null;}}',
 'org/json/JSONException.java': 'package org.json; public class JSONException extends Exception {}',
 'org/json/JSONObject.java': '''package org.json; public class JSONObject {private final java.util.Map<String,String> data=new java.util.LinkedHashMap<>(); public JSONObject put(String k,String v)throws JSONException{data.put(k,v);return this;} public boolean has(String k){return data.containsKey(k);} public String getString(String k)throws JSONException{return data.get(k);} public int length(){return data.size();} public java.util.Iterator<String> keys(){return data.keySet().iterator();} public void remove(String k){data.remove(k);}}''',
 'com/winlator/container/Container.java': '''package com.winlator.container; public class Container {public java.io.File getIconsDir(int n){return new java.io.File("/missing");} public static void checkObsoleteOrMissingProperties(org.json.JSONObject d){}}''',
-'com/winlator/core/FileUtils.java': '''package com.winlator.core; public class FileUtils {public static java.util.List<String> readLines(java.io.File f,boolean... trim){try{return java.nio.file.Files.readAllLines(f.toPath());}catch(Exception e){throw new RuntimeException(e);}} public static String getBasename(String p){return new java.io.File(p).getName().replaceFirst("\\\\.[^\\\\.]+$", "");} public static boolean writeString(java.io.File f,String s){try{java.nio.file.Files.writeString(f.toPath(),s);return true;}catch(Exception e){return false;}} public static void delete(java.io.File f){f.delete();}}''',
+'com/winlator/core/FileUtils.java': '''package com.winlator.core; public class FileUtils {public static java.util.List<String> readLines(java.io.File f,boolean... trim){try{return java.nio.file.Files.readAllLines(f.toPath());}catch(Exception e){throw new RuntimeException(e);}} public static String getBasename(String p){return new java.io.File(p).getName().replaceFirst("\\\\.[^\\\\.]+$", "");} public static boolean writeString(java.io.File f,String s){try{java.nio.file.Files.writeString(f.toPath(),s);return true;}catch(Exception e){return false;}} public static String toRelativePath(String base,String path){return path;} public static void delete(java.io.File f){f.delete();}}''',
 'com/winlator/core/WineUtils.java': 'package com.winlator.core; public class WineUtils {public static String dosToUnixPath(String s,com.winlator.container.Container c){return s;}}',
 }
+
+STUBS.update({
+'android/content/pm/PackageManager.java': 'package android.content.pm; public class PackageManager {public PackageInfo getPackageInfo(String p,int f){return new PackageInfo();}}',
+'android/content/pm/PackageInfo.java': 'package android.content.pm; public class PackageInfo {public String versionName="0.2.0";public int versionCode=34;}',
+'android/os/Build.java': 'package android.os; public class Build {public static final String MANUFACTURER="TestManufacturer",MODEL="ARM64Panel",FINGERPRINT="fixture/fingerprint";public static class VERSION {public static final String RELEASE="15";public static final int SDK_INT=35;}}',
+'android/os/Environment.java': 'package android.os; public class Environment {public static java.io.File external;public static java.io.File getExternalStorageDirectory(){return external;}}',
+'androidx/annotation/NonNull.java': 'package androidx.annotation; public @interface NonNull {}',
+})
+CRASH_TEST = r'''
+static void crashAndRootfsTests()throws Exception {
+Path base=Files.createTempDirectory("crash-log");
+android.content.Context context=new android.content.Context(base.toFile());
+android.os.Environment.external=base.resolve("shared").toFile();
+final int[] delegated={0};
+Thread.setDefaultUncaughtExceptionHandler((thread,error)->delegated[0]++);
+EduRunnerCrashHandler.install(context);
+Thread.getDefaultUncaughtExceptionHandler().uncaughtException(Thread.currentThread(),new IllegalStateException("test-crash"));
+File[] logs=new File(android.os.Environment.external,"GRXT").listFiles();
+if(logs==null||logs.length!=1||!logs[0].getName().matches("crash-[0-9-]+_[0-9-]+[.]txt"))throw new AssertionError("Primary crash file missing");
+String report=Files.readString(logs[0].toPath());
+for(String value:new String[]{"test-crash","Regression.java","Thread: main","SDK 35","TestManufacturer ARM64Panel","fixture/fingerprint","dev.grxt.edurunner","Version: 0.2.0"})
+if(!report.contains(value))throw new AssertionError("Crash field missing: "+value);
+// Shared storage exists but cannot contain a directory; exercise actual write failure fallback.
+Path denied=base.resolve("denied");Files.writeString(denied,"not a directory");android.os.Environment.external=denied.toFile();
+Thread.getDefaultUncaughtExceptionHandler().uncaughtException(Thread.currentThread(),new IOException("fallback-test"));
+logs=new File(context.getExternalFilesDir(null),"GRXT").listFiles();
+if(logs==null||logs.length!=1||!Files.readString(logs[0].toPath()).contains("fallback-test"))throw new AssertionError("Fallback crash file missing");
+if(delegated[0]!=2)throw new AssertionError("Previous crash handler not invoked");
+com.winlator.xenvironment.RootFS root=com.winlator.xenvironment.RootFS.find(context);
+if(root.isValid()||root.getVersion()!=0)throw new AssertionError("Clean RootFS should not be ready");
+root.getRFSVersionFile().getParentFile().mkdirs();
+Files.writeString(root.getRFSVersionFile().toPath(),"");
+if(root.getVersion()!=0)throw new AssertionError("Truncated RootFS marker accepted");
+Files.writeString(root.getRFSVersionFile().toPath(),"corrupt");
+if(root.getVersion()!=0)throw new AssertionError("Invalid RootFS marker accepted");
+Files.writeString(root.getRFSVersionFile().toPath(),"23");
+if(root.getVersion()!=23||!root.isValid())throw new AssertionError("Valid RootFS marker rejected");
+System.out.println("PASS: real crash logger primary/fallback, full fields, handler chaining and corrupt RootFS marker recovery");
+}
+'''
 
 STUBS.update({
 'android/net/Uri.java': 'package android.net; public class Uri {public final String id; public final boolean children; public Uri(String id,boolean children){this.id=id;this.children=children;} public static Uri parse(String s){return new Uri("root",false);} public String toString(){return "content://school/tree/root/document/"+id;}}',
@@ -105,8 +145,8 @@ System.out.println("PASS: real Shortcut parser resolves nested EXE, spaces and C
     test = tmp / 'com/winlator/Regression.java'
     test.parent.mkdir(parents=True, exist_ok=True)
     if (SOURCE / 'com/winlator/EduRunnerFolderImporter.java').exists():
-        main = main.replace('public static void main(String[] args)', IMPORT_TEST + '\npublic static void main(String[] args)')
-        main = main.replace('String name="Big English",rel=', 'importerTests();\nString name="Big English",rel=')
+        main = main.replace('public static void main(String[] args)', IMPORT_TEST + CRASH_TEST + '\npublic static void main(String[] args)')
+        main = main.replace('String name="Big English",rel=', 'importerTests(); crashAndRootfsTests();\nString name="Big English",rel=')
     test.write_text(main)
     files = list(tmp.rglob('*.java')) + [SOURCE / 'com/winlator/core/StringUtils.java', SOURCE / 'com/winlator/container/Shortcut.java']
     if helper.exists():
@@ -114,5 +154,6 @@ System.out.println("PASS: real Shortcut parser resolves nested EXE, spaces and C
     importer = SOURCE / 'com/winlator/EduRunnerFolderImporter.java'
     if importer.exists():
         files.append(importer)
+        files.extend([SOURCE / 'com/winlator/EduRunnerCrashHandler.java', SOURCE / 'com/winlator/xenvironment/RootFS.java'])
     subprocess.run(['javac', '-encoding', 'UTF-8', '-d', str(tmp / 'classes'), *map(str, files)], check=True)
     subprocess.run(['java', '-cp', str(tmp / 'classes'), 'com.winlator.Regression'], check=True)

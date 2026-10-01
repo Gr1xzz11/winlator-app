@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Winlator</string>
+    <string name="app_name">GRXT EduRunner</string>
     <string name="run">Executar</string>
     <string name="edit">Editar</string>
     <string name="remove">Remover</string>
@@ -292,10 +292,10 @@
     <string name="full">Completo</string>
     <string name="renderer">Renderizador</string>
     <string name="default_no_override">Padrão (Sem sobrescrita)</string>
-    <string name="fgs_notification_channel_desc">Mantém o Winlator em execução em segundo plano para que uma sessão do Wine não seja interrompida pelo gerenciamento de processos em segundo plano do Android.</string>
-    <string name="fgs_notification_content_container_background">A sessão do container está pausada em segundo plano</string>
-    <string name="fgs_notification_content_container_foreground">Há uma sessão de container em execução</string>
-    <string name="fgs_notification_content_else">O Winlator está executando em segundo plano</string>
+    <string name="fgs_notification_channel_desc">Поддерживает работу учебной программы в фоновом режиме.</string>
+    <string name="fgs_notification_content_container_background">Учебная программа работает в фоне</string>
+    <string name="fgs_notification_content_container_foreground">Учебная программа запущена</string>
+    <string name="fgs_notification_content_else">GRXT EduRunner работает в фоне</string>
     <string name="enable_background_wakelock">Ativar wakelock quando o dispositivo está bloqueado</string>
     <string name="save_mem_on_run_from_steam">Economize memória ao executar a partir do Steam</string>
     <string name="present_mode">Modo de Apresentação</string>

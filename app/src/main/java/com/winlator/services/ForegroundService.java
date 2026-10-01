@@ -275,11 +275,11 @@ public class ForegroundService extends Service {
         boolean containerActive = sessionActive.get();
 
         // Determine target activity: Game screen if active, else Main menu
-        Class<?> targetActivity = containerActive ? XServerDisplayActivity.class : MainActivity.class;
+        Class<?> targetActivity = containerActive ? XServerDisplayActivity.class : com.winlator.EduRunnerActivity.class;
 
         Notification n = notificationUtils.createForegroundNotification(
                 getNotificationContent(),
-                "Winlator",
+                "GRXT EduRunner",
                 XServerDisplayActivity.class, // Service class for the 'Exit' action
                 null, // Exit action here, not used because might cause issues
                 targetActivity // Activity class for the 'Open' (notification tap) action
@@ -371,7 +371,7 @@ public class ForegroundService extends Service {
     @NonNull
     private static String getNotificationContent() {
         ForegroundService svc = instance;
-        if (svc == null) return "Winlator is running in the background";
+        if (svc == null) return "GRXT EduRunner работает в фоне";
 
         if (sessionActive.get()) {
             return isSessionInBackground && (isDeviceLocked() || !isInPictureInPictureMode())
