@@ -43,17 +43,32 @@ public class EduRunnerHomeFragment extends Fragment {
         recyclerView.setLayoutManager(new GridLayoutManager(requireContext(),
                 getResources().getConfiguration().smallestScreenWidthDp >= 600 ? 3 : 2));
 
-        view.findViewById(R.id.AddProgramButton).setOnClickListener(v ->
-                Toast.makeText(requireContext(), "Импорт программы будет доступен в следующей сборке", Toast.LENGTH_SHORT).show());
         view.findViewById(R.id.SettingsButton).setOnClickListener(v -> showSettings());
-        view.findViewById(R.id.VersionText).setOnClickListener(v -> onVersionTap());
         refresh();
     }
 
     private void showSettings() {
+        String[] items = {"О приложении"};
         new AlertDialog.Builder(requireContext())
-                .setTitle("GRXT EduRunner")
-                .setMessage("Версия 0.1.0-winlator11.2\n\nДля запуска программ используется совместимый Wine/Box64 runtime.")
+                .setTitle("Настройки")
+                .setItems(items, (d, which) -> showAbout())
+                .setNegativeButton("Закрыть", null)
+                .show();
+    }
+
+    private void showAbout() {
+        TextView version = new TextView(requireContext());
+        version.setText("GRXT EduRunner\n\nВерсия 0.1.0-winlator11.2");
+        version.setTextColor(0xFFFFFFFF);
+        version.setTextSize(18);
+        version.setGravity(android.view.Gravity.CENTER);
+        int pad = (int) (28 * getResources().getDisplayMetrics().density);
+        version.setPadding(pad, pad, pad, pad);
+        version.setOnClickListener(v -> onVersionTap());
+
+        new AlertDialog.Builder(requireContext())
+                .setTitle("О приложении")
+                .setView(version)
                 .setPositiveButton("Готово", null)
                 .show();
     }
